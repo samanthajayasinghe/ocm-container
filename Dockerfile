@@ -44,11 +44,24 @@ RUN microdnf --assumeyes --nodocs install \
       tar \
       vim-enhanced \
       wget \
+      podman \
+      fuse-overlayfs \
+      crun\
       && microdnf clean all \
       && rm -rf /var/cache/yum
 
 RUN git clone --depth 1 https://github.com/junegunn/fzf.git /root/.fzf \
       && /root/.fzf/install --all
+
+# podman container config
+# Overlay over overlay is often denied by the kernel, so this creates non overlay volumes to be used within the container.
+VOLUME /var/lib/containers
+
+# adjust storage.conf to enable fuse-overlayfs storage.
+RUN sed -i -e 's|^#mount_program|mount_program|g' -e 's|^mountopt[[:space:]]*=.*$|mountopt = "nodev,fsync=0"|g' /etc/containers/storage.conf
+
+# add containers.conf file to make sure containers run easier.
+COPY utils/dockerfile_assets/containers.conf /etc/containers/containers.conf
 
 ### Download the binaries
 # Anything in this image must be COPY'd into the final image, below
@@ -57,6 +70,7 @@ FROM ${BASE_IMAGE} as builder
 # Adds Platform Conversion Tool for arm64/x86_64 compatibility
 # need to add this a second time to add it to the builder image
 COPY utils/dockerfile_assets/platforms.sh /usr/local/bin/platform_convert
+
 
 # jq is a pre-req for making parsing of download urls easier
 RUN microdnf --assumeyes --nodocs install \
@@ -294,7 +308,7 @@ RUN chmod -R +x /out
 
 
 FROM builder as backplane-builder
-ARG BACKPLANE_VERSION="tags/v0.1.1"
+ARG BACKPLANE_VERSION="tags/v0.1.7"
 ENV BACKPLANE_URL_SLUG="openshift/backplane-cli"
 ENV BACKPLANE_URL="https://api.github.com/repos/${BACKPLANE_URL_SLUG}/releases/${BACKPLANE_VERSION}"
 WORKDIR /backplane
